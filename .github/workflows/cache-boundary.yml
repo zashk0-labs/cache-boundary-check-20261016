@@ -1,0 +1,40 @@
+name: Cache boundary check
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  seed:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write public marker
+        run: |
+          mkdir -p cache-marker
+          printf '%s\n' 'OWNED_CACHE_MARKER_20261016_A' > cache-marker/marker.txt
+      - name: Save main branch cache
+        uses: actions/cache/save@v4
+        with:
+          path: cache-marker/marker.txt
+          key: owned-cache-marker-v1-${{ runner.os }}
+  read:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Restore cache
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: cache-marker/marker.txt
+          key: owned-cache-marker-v1-${{ runner.os }}
+      - name: Check marker
+        run: |
+          if [ ! -f cache-marker/marker.txt ]; then
+            echo 'Cache marker not found' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          grep -Fx 'OWNED_CACHE_MARKER_20261016_A' cache-marker/marker.txt
+          echo 'The PR restored the public marker saved by main.' >> "$GITHUB_STEP_SUMMARY"
